@@ -8,12 +8,11 @@ Monitors the OPNsense built-in DHCP server and notifies as devices go on/offline
 
 # Config
 
-See example config below.
+See example config below. Name this file `config.json`.
 
 ```json
 {
     "url": "https://opnsense.lan",
-    "cert_path": "./cert.pem",
     "api_key": "<snip>",
     "api_secret": "<snip>",
     "interval": 15,

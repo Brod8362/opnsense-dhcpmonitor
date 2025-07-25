@@ -5,6 +5,7 @@ import time
 import sys
 import os
 import logging
+import datetime
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
@@ -20,11 +21,15 @@ class ClientEntry:
 @dataclass
 class Config:
     url: str
-    cert_path: str
     interval: int
     api_key: str
     api_secret: str
     clients: list[ClientEntry]
+    template: str = "%U went %S at %T"
+    ntfy_url: Optional[str] = None
+    ntfy_token: Optional[str] = None
+    discord_webhook_url: Optional[str] = None
+    test_mode: bool = False    
 
 def read_api_key(path: str) -> (str, str):
     with open(path, "r") as fd:
@@ -40,8 +45,7 @@ def main():
         config = Config(**json.load(fd))
 
     config.clients = list(map(lambda x: ClientEntry(**x), config.clients))
-
-    os.environ["REQUESTS_CA_BUNDLE"] = config.cert_path
+    
     s = requests.Session()
     s.auth = (config.api_key, config.api_secret)
 
@@ -70,7 +74,7 @@ def main():
         )
 
         if r.status_code != 200:
-            logging.warn(f"Failed to get device list: {r.status_code}")
+            logging.warning(f"Failed to get device list: {r.status_code}")
             continue
 
         logging.info(f"Completed request in {r.elapsed}")
@@ -99,19 +103,48 @@ def main():
                 if user in new_online_users and user not in online_users:
                     # Transition to online
                     logging.debug(f"{user} transition to online")
-                    transition(user, True)
+                    transition(user, True, config)
 
                 if user in online_users and user not in new_online_users:
                     # Transition to offline
                     logging.debug(f"{user} transition to offline")
-                    transition(user, False)
+                    transition(user, False, config)
+
+
+        if config.test_mode:
+            transition("test", False, config)
 
         online_users = new_online_users
         time.sleep(config.interval)
 
 
-def transition(user: str, into_online: bool): 
-    logging.info(f"{user} {into_online=}")
+def format_template(template: str, user: str, online: bool):
+    return template.replace("%U", user).replace("%S", "online" if online else "offline").replace("%T", datetime.datetime.now().isoformat())
+
+
+def transition(user: str, into_online: bool, config: Config): 
+    logging.debug(f"{user} {into_online=}")
+    content = format_template(config.template, user, into_online)
+    if config.ntfy_url is not None:
+        # ntfy
+        r = requests.post(config.ntfy_url, headers={
+                "Authorization": f"Bearer {config.ntfy_token}"
+            },
+            data=content
+        )
+        if r.status_code != 200:
+            logging.warning(f"Failed to send ntfy notification: {r.status_code}: [{r.content.decode('utf-8')}]")
+    elif config.discord_webhook_url is not None:
+        # discord
+        
+        r = requests.post(config.discord_webhook_url, json={
+            "content": content
+        })
+        if r.status_code != 200:
+            logging.warning(f"Failed to send discord webhook: {r.status_code}")
+    else: 
+        # no notif configured
+        logging.warning("No notification system configured")
 
 
 if __name__ == "__main__":
