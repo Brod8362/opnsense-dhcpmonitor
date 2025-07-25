@@ -96,17 +96,22 @@ def main():
         if online_users is not None:
             # Compare old status and new status            
             for user in all_users:
-                
                 if user in new_online_users and user not in online_users:
                     # Transition to online
-                    logging.info(f"{user} transition to online")
+                    logging.debug(f"{user} transition to online")
+                    transition(user, True)
 
                 if user in online_users and user not in new_online_users:
                     # Transition to offline
-                    logging.info(f"{user} transition to offline")
+                    logging.debug(f"{user} transition to offline")
+                    transition(user, False)
 
-        user_status = new_online_users
+        online_users = new_online_users
         time.sleep(config.interval)
+
+
+def transition(user: str, into_online: bool): 
+    logging.info(f"{user} {into_online=}")
 
 
 if __name__ == "__main__":
